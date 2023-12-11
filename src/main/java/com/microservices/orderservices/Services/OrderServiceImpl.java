@@ -26,7 +26,7 @@ import java.util.UUID;
 public class OrderServiceImpl implements OrderService{
 
     private final OrderRepository orderRepository;
-    private final RestClient restClient;
+    private final RestClient.Builder restClient;
 
     @Override
     public void placeOrder(OrderRequest orderRequest) {
@@ -40,15 +40,15 @@ public class OrderServiceImpl implements OrderService{
         List<String> skuCodeList = order.getOrderLineItemsList().stream().map(OrderLineItems::getSkuCode).toList();
 
         //Call inventory service to see if the product is in stock
-        InventoryResponse[] inventoryResponses = restClient.get()
-                .uri("http://localhost:8082/api/inventory",uriBuilder -> uriBuilder.queryParam("sku-code",skuCodeList).build())
+        InventoryResponse[] inventoryResponses = restClient.build().get()
+                .uri("http://inventory-service/api/inventory",uriBuilder -> uriBuilder.queryParam("sku-code",skuCodeList).build())
                 .retrieve()
                 .body(InventoryResponse[].class);
 
         boolean AllMatch = Arrays.stream(inventoryResponses).allMatch(InventoryResponse::isInStock);
 
 
-        if(AllMatch && inventoryResponses.length!= skuCodeList.size()){
+        if(AllMatch && inventoryResponses.length== skuCodeList.size()){
             orderRepository.save(order);
             log.info("Order {} is saved",order.getId());
         }else{
