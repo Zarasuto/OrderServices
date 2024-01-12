@@ -7,6 +7,8 @@ import com.microservices.orderservices.Dto.OrderRequestLineDto;
 import com.microservices.orderservices.Model.Order;
 import com.microservices.orderservices.Model.OrderLineItems;
 import com.microservices.orderservices.Repository.OrderRepository;
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +30,9 @@ public class OrderServiceImpl implements OrderService{
     private final OrderRepository orderRepository;
     private final RestClient.Builder restClient;
 
+    @Autowired
+    private Tracer tracer;
+
     @Override
     public void placeOrder(OrderRequest orderRequest) {
         Order order = new Order();
@@ -39,11 +44,14 @@ public class OrderServiceImpl implements OrderService{
         order.setOrderLineItemsList(orderLineItemsList);
         List<String> skuCodeList = order.getOrderLineItemsList().stream().map(OrderLineItems::getSkuCode).toList();
 
+        log.info("calling inventory service");
+        Span inventorySpan = tracer.nextSpan().name("calling-inventoryService").start();
         //Call inventory service to see if the product is in stock
         InventoryResponse[] inventoryResponses = restClient.build().get()
                 .uri("http://inventory-service/api/inventory",uriBuilder -> uriBuilder.queryParam("sku-code",skuCodeList).build())
                 .retrieve()
                 .body(InventoryResponse[].class);
+        inventorySpan.end();
 
         boolean AllMatch = Arrays.stream(inventoryResponses).allMatch(InventoryResponse::isInStock);
 
